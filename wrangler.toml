@@ -7,6 +7,6 @@ pages_build_output_dir = "dist"
 # printed database_id below (and add the same binding in the Cloudflare
 # Pages dashboard under Settings -> Functions -> D1 database bindings).
 [[d1_databases]]
-binding = "NOTES_DB"
+binding = "DB"
 database_name = "notes-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "6cca19c5-7743-4284-98f1-e190914b4641"
