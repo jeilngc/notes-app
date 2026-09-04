@@ -1,0 +1,12 @@
+name = "notes"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# D1 database binding used by functions/api/notes/*.
+# Create the database with `wrangler d1 create notes-db`, then paste the
+# printed database_id below (and add the same binding in the Cloudflare
+# Pages dashboard under Settings -> Functions -> D1 database bindings).
+[[d1_databases]]
+binding = "NOTES_DB"
+database_name = "notes-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

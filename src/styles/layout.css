@@ -1,0 +1,206 @@
+.boot-screen {
+  min-height: 100dvh;
+  background: var(--background);
+}
+
+.app-shell {
+  position: relative;
+  display: flex;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--background);
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  position: relative;
+  z-index: 1;
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  gap: 14px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.0625rem;
+}
+
+.new-note-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.notes-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+}
+.notes-search {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+}
+.notes-list-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.notes-empty {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  padding: 24px 8px;
+  text-align: center;
+}
+
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+/* ---------- Editor pane ---------- */
+
+.editor-pane {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.editor-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+}
+
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px 48px 40px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.editor-back {
+  display: none;
+}
+.editor-meta {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  letter-spacing: 0.01em;
+}
+
+.editor-title {
+  background: transparent;
+  border: none;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--foreground);
+  margin-bottom: 16px;
+  padding: 0;
+}
+.editor-title::placeholder {
+  color: var(--muted-foreground);
+}
+.editor-title:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.editor-body {
+  flex: 1;
+  background: transparent;
+  border: none;
+  resize: none;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+.editor-body::placeholder {
+  color: var(--muted-foreground);
+}
+.editor-body:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ---------- Responsive: stack sidebar/editor as two mobile views ---------- */
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    border-right: none;
+  }
+  .sidebar-hidden-mobile,
+  .editor-hidden-mobile {
+    display: none;
+  }
+  .editor-back {
+    display: inline-flex;
+  }
+  .editor {
+    padding: 16px 20px 32px;
+  }
+  .editor-title {
+    font-size: 1.5rem;
+  }
+}
