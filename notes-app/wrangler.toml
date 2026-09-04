@@ -16,4 +16,4 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "NOTES_DB"
 database_name = "notes-db"
-database_id = "6cca19c5-7743-4284-98f1-e190914b4641"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
