@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function NoteEditor({ note, onChange, onDelete, onBack }) {
+export default function NoteEditor({ note, folders, onChange, onDelete, onBack }) {
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const debounceRef = useRef(null);
@@ -33,7 +33,20 @@ export default function NoteEditor({ note, onChange, onDelete, onBack }) {
           Edited {updated.toLocaleDateString([], { month: "short", day: "numeric" })} at{" "}
           {updated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
         </span>
-        <button className="btn btn-ghost btn-icon btn-danger editor-delete" onClick={() => onDelete(note.id)} aria-label="Delete note">
+        <select
+          className="field editor-folder-select"
+          value={note.folderId || ""}
+          onChange={(e) => onChange(note.id, { folderId: e.target.value || null })}
+          aria-label="Folder"
+        >
+          <option value="">No folder</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-ghost btn-icon btn-danger editor-delete" onClick={() => onDelete(note)} aria-label="Delete note">
           🗑
         </button>
       </div>

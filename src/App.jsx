@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import Login from "./components/Login.jsx";
 import NotesList from "./components/NotesList.jsx";
 import NoteEditor from "./components/NoteEditor.jsx";
+import FoldersBar from "./components/FoldersBar.jsx";
+import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import {
   checkSession,
   login,
@@ -10,6 +12,9 @@ import {
   createNote,
   updateNote,
   deleteNote,
+  fetchFolders,
+  createFolder,
+  deleteFolder,
   flushQueue,
   pendingCount
 } from "./lib/api.js";
@@ -17,17 +22,22 @@ import {
 export default function App() {
   const [authed, setAuthed] = useState(null); // null = checking, false = gate, true = in
   const [notes, setNotes] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [activeFolderId, setActiveFolderId] = useState(null);
   const [search, setSearch] = useState("");
   const [offline, setOffline] = useState(!navigator.onLine);
   const [pending, setPending] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [mobileView, setMobileView] = useState("list"); // "list" | "editor"
+  const [confirmState, setConfirmState] = useState(null); // { type: "note"|"folder", target }
 
-  const loadNotes = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     try {
-      const { notes: fetched, offline: isOffline } = await fetchNotes();
-      setNotes(fetched.sort((a, b) => b.updatedAt - a.updatedAt));
-      setOffline(isOffline);
+      const [notesResult, foldersResult] = await Promise.all([fetchNotes(), fetchFolders()]);
+      setNotes(notesResult.notes.sort((a, b) => b.updatedAt - a.updatedAt));
+      setFolders(foldersResult.folders);
+      setOffline(notesResult.offline || foldersResult.offline);
     } catch (err) {
       if (err.code === 401) setAuthed(false);
     }
@@ -38,11 +48,11 @@ export default function App() {
     try {
       await flushQueue();
       setPending(pendingCount());
-      await loadNotes();
+      await loadAll();
     } catch (err) {
       if (err.code === 401) setAuthed(false);
     }
-  }, [loadNotes]);
+  }, [loadAll]);
 
   // Initial session check
   useEffect(() => {
@@ -51,10 +61,10 @@ export default function App() {
       .catch(() => setAuthed(false));
   }, []);
 
-  // Once authed, load notes and set up online/offline + focus listeners
+  // Once authed, load notes/folders and set up online/offline + focus listeners
   useEffect(() => {
     if (!authed) return;
-    loadNotes();
+    loadAll();
     setPending(pendingCount());
 
     function handleOnline() {
@@ -72,7 +82,7 @@ export default function App() {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("focus", sync);
     };
-  }, [authed, loadNotes, sync]);
+  }, [authed, loadAll, sync]);
 
   async function handleLogin(password) {
     await login(password);
@@ -83,11 +93,22 @@ export default function App() {
     await logout();
     setAuthed(false);
     setNotes([]);
+    setFolders([]);
     setActiveId(null);
   }
 
+  async function handleManualRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await sync();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function handleNew() {
-    const note = await createNote({ title: "", body: "" });
+    const note = await createNote({ title: "", body: "", folderId: activeFolderId });
     setNotes((prev) => [note, ...prev]);
     setActiveId(note.id);
     setMobileView("editor");
@@ -104,14 +125,38 @@ export default function App() {
     setPending(pendingCount());
   }
 
-  async function handleDelete(id) {
-    await deleteNote(id);
-    setNotes((prev) => prev.filter((n) => n.id !== id));
-    setPending(pendingCount());
-    if (activeId === id) {
-      setActiveId(null);
-      setMobileView("list");
+  function requestDeleteNote(note) {
+    setConfirmState({ type: "note", target: note });
+  }
+
+  function requestDeleteFolder(folder) {
+    setConfirmState({ type: "folder", target: folder });
+  }
+
+  async function confirmDelete() {
+    if (!confirmState) return;
+    const { type, target } = confirmState;
+    setConfirmState(null);
+
+    if (type === "note") {
+      await deleteNote(target.id);
+      setNotes((prev) => prev.filter((n) => n.id !== target.id));
+      setPending(pendingCount());
+      if (activeId === target.id) {
+        setActiveId(null);
+        setMobileView("list");
+      }
+    } else if (type === "folder") {
+      await deleteFolder(target.id);
+      setFolders((prev) => prev.filter((f) => f.id !== target.id));
+      setNotes((prev) => prev.map((n) => (n.folderId === target.id ? { ...n, folderId: null } : n)));
+      if (activeFolderId === target.id) setActiveFolderId(null);
     }
+  }
+
+  async function handleCreateFolder(name) {
+    const folder = await createFolder(name);
+    setFolders((prev) => [...prev, folder].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
   function handleSelect(id) {
@@ -128,6 +173,7 @@ export default function App() {
   }
 
   const activeNote = notes.find((n) => n.id === activeId) || null;
+  const visibleNotes = activeFolderId === null ? notes : notes.filter((n) => n.folderId === activeFolderId);
 
   return (
     <div className="app-shell">
@@ -140,17 +186,35 @@ export default function App() {
             <span className="brand-mark">N</span>
             <span className="brand-name">Notes</span>
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={handleLogout} aria-label="Lock">
-            🔒
-          </button>
+          <div className="sidebar-header-actions">
+            <button
+              className={`btn btn-ghost btn-icon ${refreshing ? "spin" : ""}`}
+              onClick={handleManualRefresh}
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              ⟳
+            </button>
+            <button className="btn btn-ghost btn-icon" onClick={handleLogout} aria-label="Lock">
+              🔒
+            </button>
+          </div>
         </div>
 
         <button className="btn btn-primary new-note-btn" onClick={handleNew}>
           + New note
         </button>
 
+        <FoldersBar
+          folders={folders}
+          activeFolderId={activeFolderId}
+          onSelect={setActiveFolderId}
+          onCreate={handleCreateFolder}
+          onDelete={requestDeleteFolder}
+        />
+
         <NotesList
-          notes={notes}
+          notes={visibleNotes}
           activeId={activeId}
           onSelect={handleSelect}
           search={search}
@@ -169,8 +233,9 @@ export default function App() {
         {activeNote ? (
           <NoteEditor
             note={activeNote}
+            folders={folders}
             onChange={handleChange}
-            onDelete={handleDelete}
+            onDelete={requestDeleteNote}
             onBack={() => setMobileView("list")}
           />
         ) : (
@@ -179,6 +244,20 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <ConfirmDialog
+        open={!!confirmState}
+        title={confirmState?.type === "folder" ? "Delete this folder?" : "Delete this note?"}
+        message={
+          confirmState?.type === "folder"
+            ? `"${confirmState?.target?.name}" will be removed. Notes inside it won't be deleted — they'll move to No folder.`
+            : `"${confirmState?.target?.title || "Untitled"}" will be permanently deleted. This can't be undone.`
+        }
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   );
 }

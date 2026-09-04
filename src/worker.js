@@ -72,6 +72,32 @@ async function handleApi(request, env, pathname) {
     }
   }
 
+  if (pathname === "/api/folders" && request.method === "GET") {
+    return json(await Notes.listFolders(env));
+  }
+
+  if (pathname === "/api/folders" && request.method === "POST") {
+    const body = await safeJson(request);
+    const folder = body ? await Notes.createFolder(env, body) : null;
+    return folder ? json(folder, { status: 201 }) : json({ error: "A folder name is required." }, { status: 400 });
+  }
+
+  const folderMatch = pathname.match(/^\/api\/folders\/([^/]+)$/);
+  if (folderMatch) {
+    const id = decodeURIComponent(folderMatch[1]);
+
+    if (request.method === "PUT") {
+      const body = await safeJson(request);
+      const updated = body ? await Notes.renameFolder(env, id, body.name) : null;
+      return updated ? json(updated) : json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (request.method === "DELETE") {
+      await Notes.deleteFolder(env, id);
+      return new Response(null, { status: 204 });
+    }
+  }
+
   return json({ error: "Not found" }, { status: 404 });
 }
 

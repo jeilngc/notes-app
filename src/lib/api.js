@@ -3,6 +3,7 @@
 // writes made offline are queued in localStorage and flushed on reconnect.
 
 const CACHE_KEY = "notes:cache:v1";
+const FOLDERS_CACHE_KEY = "notes:folders:v1";
 const QUEUE_KEY = "notes:queue:v1";
 
 function readJSON(key, fallback) {
@@ -28,6 +29,14 @@ export function getCachedNotes() {
 
 function setCachedNotes(notes) {
   writeJSON(CACHE_KEY, notes);
+}
+
+export function getCachedFolders() {
+  return readJSON(FOLDERS_CACHE_KEY, []);
+}
+
+function setCachedFolders(folders) {
+  writeJSON(FOLDERS_CACHE_KEY, folders);
 }
 
 function getQueue() {
@@ -71,6 +80,7 @@ export async function login(password) {
 export async function logout() {
   await request("/api/logout", { method: "POST" }).catch(() => {});
   setCachedNotes([]);
+  setCachedFolders([]);
   setQueue([]);
 }
 
@@ -95,11 +105,47 @@ function queueMutation(mutation) {
   setQueue(queue);
 }
 
+export async function fetchFolders() {
+  try {
+    const folders = await request("/api/folders");
+    setCachedFolders(folders);
+    return { folders, offline: false };
+  } catch (err) {
+    if (err.code === 401) throw err;
+    return { folders: getCachedFolders(), offline: true };
+  }
+}
+
+export async function createFolder(name) {
+  const folder = await request("/api/folders", {
+    method: "POST",
+    body: JSON.stringify({ name })
+  });
+  setCachedFolders([...getCachedFolders(), folder]);
+  return folder;
+}
+
+export async function renameFolder(id, name) {
+  const folder = await request(`/api/folders/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name })
+  });
+  setCachedFolders(getCachedFolders().map((f) => (f.id === id ? folder : f)));
+  return folder;
+}
+
+export async function deleteFolder(id) {
+  await request(`/api/folders/${id}`, { method: "DELETE" });
+  setCachedFolders(getCachedFolders().filter((f) => f.id !== id));
+  // Notes in this folder move to "no folder" server-side; mirror that locally.
+  setCachedNotes(getCachedNotes().map((n) => (n.folderId === id ? { ...n, folderId: null } : n)));
+}
+
 // Optimistic create: assigns a temporary id immediately so the UI can
 // navigate straight into the new note, then reconciles with the server id.
 export async function createNote(note) {
   const tempId = `temp-${Date.now()}`;
-  const optimistic = { id: tempId, title: "", body: "", updatedAt: Date.now(), ...note };
+  const optimistic = { id: tempId, title: "", body: "", folderId: null, updatedAt: Date.now(), ...note };
   const cached = getCachedNotes();
   setCachedNotes([optimistic, ...cached]);
 

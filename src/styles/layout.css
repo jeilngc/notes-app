@@ -31,6 +31,12 @@
   justify-content: space-between;
 }
 
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -58,6 +64,83 @@
 .new-note-btn {
   width: 100%;
   justify-content: center;
+}
+
+/* ---------- Folders ---------- */
+
+.folders-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.folder-pill {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 200ms ease-out;
+}
+.folder-pill:hover {
+  border-color: var(--border-hover);
+  color: var(--foreground);
+  background: rgba(255, 255, 255, 0.04);
+}
+.folder-pill[data-active="true"] {
+  background: var(--accent-muted);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--accent);
+}
+
+.folder-pill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.folder-pill-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.folder-pill-wrap:hover .folder-pill-remove {
+  display: flex;
+}
+.folder-pill-remove:hover {
+  background: var(--danger);
+  color: #1a0a0a;
+}
+
+.folder-pill-add {
+  color: var(--muted-foreground);
+  border-style: dashed;
+}
+
+.folder-add-form {
+  display: inline-flex;
+}
+.folder-add-input {
+  height: 30px;
+  width: 120px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  border-radius: var(--radius-full);
 }
 
 .notes-list {
@@ -146,6 +229,19 @@
   letter-spacing: 0.01em;
 }
 
+.editor-folder-select {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+  width: auto;
+  max-width: 160px;
+  color: var(--muted-foreground);
+}
+.editor-folder-select:focus {
+  color: var(--foreground);
+}
+
 .editor-title {
   background: transparent;
   border: none;
@@ -199,6 +295,13 @@
   }
   .editor {
     padding: 16px 20px 32px;
+  }
+  .editor-toolbar {
+    flex-wrap: wrap;
+  }
+  .editor-meta {
+    order: 3;
+    flex-basis: 100%;
   }
   .editor-title {
     font-size: 1.5rem;
