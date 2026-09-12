@@ -9,10 +9,12 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
+# Required encrypted secrets. Wrangler will validate that these are present
+# when deploying instead of allowing a broken auth deployment to go live.
+[secrets]
+required = ["APP_PASSWORD", "SESSION_SECRET"]
+
 # D1 database binding used by src/server/notes.js.
-# Create the database with `wrangler d1 create notes-db`, then paste the
-# printed database_id below (this also needs to match the D1 binding
-# added in the Cloudflare dashboard under this Worker's Settings -> Bindings).
 [[d1_databases]]
 binding = "NOTES_DB"
 database_name = "notes-db"
