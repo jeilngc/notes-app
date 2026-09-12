@@ -235,12 +235,9 @@ export async function renameFolder(id, name) {
 export async function deleteFolder(id) {
   await request(`/api/folders/${id}`, { method: "DELETE" });
   setCachedFolders(getCachedFolders().filter((f) => f.id !== id));
-  // Notes in this folder move to "no folder" server-side; mirror that locally.
   setCachedNotes(getCachedNotes().map((n) => (n.folderId === id ? { ...n, folderId: null } : n)));
 }
 
-// Optimistic create: assigns a temporary id immediately so the UI can
-// navigate straight into the new note, then reconciles with the server id.
 export async function createNote(note) {
   const tempId = `temp-${Date.now()}`;
   const optimistic = { id: tempId, title: "", body: "", folderId: null, updatedAt: Date.now(), ...note };
@@ -260,4 +257,76 @@ export async function createNote(note) {
     queueMutation({ type: "create", tempId, note });
     return optimistic;
   }
+}
+
+export async function updateNote(id, patch) {
+  const cached = getCachedNotes().map((n) =>
+    n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n
+  );
+  setCachedNotes(cached);
+
+  try {
+    return await request(`/api/notes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch)
+    });
+  } catch (err) {
+    if (err.code === 401) throw err;
+    if (id.startsWith("temp-")) {
+      const queue = getQueue().map((m) =>
+        m.type === "create" && m.tempId === id ? { ...m, note: { ...m.note, ...patch } } : m
+      );
+      setQueue(queue);
+    } else {
+      queueMutation({ type: "update", id, patch });
+    }
+    return null;
+  }
+}
+
+export async function deleteNote(id) {
+  setCachedNotes(getCachedNotes().filter((n) => n.id !== id));
+
+  if (id.startsWith("temp-")) {
+    setQueue(getQueue().filter((m) => !(m.type === "create" && m.tempId === id)));
+    return;
+  }
+
+  try {
+    await request(`/api/notes/${id}`, { method: "DELETE" });
+  } catch (err) {
+    if (err.code === 401) throw err;
+    queueMutation({ type: "delete", id });
+  }
+}
+
+export async function flushQueue() {
+  const queue = getQueue();
+  if (!queue.length) return { flushed: 0 };
+
+  const remaining = [];
+  let flushed = 0;
+
+  for (const m of queue) {
+    try {
+      if (m.type === "create") {
+        const saved = await request("/api/notes", {
+          method: "POST",
+          body: JSON.stringify(m.note)
+        });
+        setCachedNotes(getCachedNotes().map((n) => (n.id === m.tempId ? saved : n)));
+      } else if (m.type === "update") {
+        await request(`/api/notes/${m.id}`, { method: "PUT", body: JSON.stringify(m.patch) });
+      } else if (m.type === "delete") {
+        await request(`/api/notes/${m.id}`, { method: "DELETE" });
+      }
+      flushed++;
+    } catch (err) {
+      if (err.code === 401) throw err;
+      remaining.push(m);
+    }
+  }
+
+  setQueue(remaining);
+  return { flushed, remaining: remaining.length };
 }
