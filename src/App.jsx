@@ -7,6 +7,8 @@ import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import {
   checkSession,
   login,
+  verifyOfflinePassword,
+  hasOfflineAuth,
   logout,
   fetchNotes,
   createNote,
@@ -54,11 +56,37 @@ export default function App() {
     }
   }, [loadAll]);
 
-  // Initial session check
+  // Initial session check. If the server cannot be reached while offline,
+  // fall back to the locally stored password verifier.
   useEffect(() => {
-    checkSession()
-      .then(() => setAuthed(true))
-      .catch(() => setAuthed(false));
+    let cancelled = false;
+
+    async function initializeAuth() {
+      try {
+        await checkSession();
+        if (!cancelled) setAuthed(true);
+        return;
+      } catch (err) {
+        // A real 401 means the server is reachable but the session is invalid.
+        // Network failures should instead allow the offline authentication path.
+        if (err.code === 401) {
+          if (!cancelled) setAuthed(false);
+          return;
+        }
+      }
+
+      if (!navigator.onLine && hasOfflineAuth()) {
+        if (!cancelled) setAuthed(false);
+        return;
+      }
+
+      if (!cancelled) setAuthed(false);
+    }
+
+    initializeAuth();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Once authed, load notes/folders and set up online/offline + focus listeners
@@ -85,7 +113,21 @@ export default function App() {
   }, [authed, loadAll, sync]);
 
   async function handleLogin(password) {
-    await login(password);
+    if (navigator.onLine) {
+      await login(password);
+      setAuthed(true);
+      return;
+    }
+
+    if (!hasOfflineAuth()) {
+      throw new Error("offline-login-unavailable");
+    }
+
+    const valid = await verifyOfflinePassword(password);
+    if (!valid) {
+      throw new Error("unauthorized");
+    }
+
     setAuthed(true);
   }
 
