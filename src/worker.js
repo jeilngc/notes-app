@@ -10,13 +10,27 @@ export default {
     }
 
     // Static files matching dist/ are normally served directly by the
-    // platform without ever invoking this Worker. This fallback only runs
-    // for requests that reach the Worker without matching a static asset.
+    // platform. This fallback handles requests that reach the Worker.
     return env.ASSETS.fetch(request);
   }
 };
 
 async function handleApi(request, env, pathname) {
+  // Public diagnostic endpoint. It reports configuration state without
+  // exposing secret values or requiring authentication.
+  if (pathname === "/api/health" && request.method === "GET") {
+    const configured = Boolean(env.APP_PASSWORD && env.SESSION_SECRET);
+    const databaseBound = Boolean(env.NOTES_DB);
+    return json(
+      {
+        ok: configured && databaseBound,
+        authConfigured: configured,
+        databaseBound
+      },
+      { status: configured && databaseBound ? 200 : 503 }
+    );
+  }
+
   if (!env.APP_PASSWORD || !env.SESSION_SECRET) {
     return json(
       { error: "Server is not configured. Missing APP_PASSWORD or SESSION_SECRET." },
@@ -108,7 +122,6 @@ async function handleLogin(request, env) {
     return json({ error: "Password is required." }, { status: 400 });
   }
 
-  // Constant-time-ish comparison to avoid trivial timing leaks
   const a = new TextEncoder().encode(password);
   const b = new TextEncoder().encode(env.APP_PASSWORD);
   let mismatch = a.length !== b.length;
