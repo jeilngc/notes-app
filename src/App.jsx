@@ -22,7 +22,7 @@ import {
 } from "./lib/api.js";
 
 export default function App() {
-  const [authed, setAuthed] = useState(null); // null = checking, false = gate, true = in
+  const [authed, setAuthed] = useState(null);
   const [notes, setNotes] = useState([]);
   const [folders, setFolders] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -31,8 +31,8 @@ export default function App() {
   const [offline, setOffline] = useState(!navigator.onLine);
   const [pending, setPending] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [mobileView, setMobileView] = useState("list"); // "list" | "editor"
-  const [confirmState, setConfirmState] = useState(null); // { type: "note"|"folder", target }
+  const [mobileView, setMobileView] = useState("list");
+  const [confirmState, setConfirmState] = useState(null);
 
   const loadAll = useCallback(async () => {
     try {
@@ -56,8 +56,6 @@ export default function App() {
     }
   }, [loadAll]);
 
-  // Initial session check. If the server cannot be reached while offline,
-  // fall back to the locally stored password verifier.
   useEffect(() => {
     let cancelled = false;
 
@@ -67,17 +65,10 @@ export default function App() {
         if (!cancelled) setAuthed(true);
         return;
       } catch (err) {
-        // A real 401 means the server is reachable but the session is invalid.
-        // Network failures should instead allow the offline authentication path.
         if (err.code === 401) {
           if (!cancelled) setAuthed(false);
           return;
         }
-      }
-
-      if (!navigator.onLine && hasOfflineAuth()) {
-        if (!cancelled) setAuthed(false);
-        return;
       }
 
       if (!cancelled) setAuthed(false);
@@ -89,7 +80,6 @@ export default function App() {
     };
   }, []);
 
-  // Once authed, load notes/folders and set up online/offline + focus listeners
   useEffect(() => {
     if (!authed) return;
     loadAll();
@@ -113,10 +103,14 @@ export default function App() {
   }, [authed, loadAll, sync]);
 
   async function handleLogin(password) {
-    if (navigator.onLine) {
+    try {
       await login(password);
       setAuthed(true);
       return;
+    } catch (err) {
+      // A 401/400/500 is a real server response and must not be bypassed.
+      // Only a fetch/network failure is allowed to use the local verifier.
+      if (err.code) throw err;
     }
 
     if (!hasOfflineAuth()) {
@@ -128,6 +122,7 @@ export default function App() {
       throw new Error("unauthorized");
     }
 
+    setOffline(true);
     setAuthed(true);
   }
 
@@ -218,88 +213,49 @@ export default function App() {
   const visibleNotes = activeFolderId === null ? notes : notes.filter((n) => n.folderId === activeFolderId);
 
   return (
-    <div className="app-shell">
-      <div className="noise" />
-      <div className="glow-orb" style={{ width: 500, height: 500, top: -200, right: -150 }} />
-
-      <aside className={`sidebar ${mobileView === "editor" ? "sidebar-hidden-mobile" : ""}`}>
-        <div className="sidebar-header">
-          <div className="brand">
-            <span className="brand-mark">N</span>
-            <span className="brand-name">Notes</span>
-          </div>
-          <div className="sidebar-header-actions">
-            <button
-              className={`btn btn-ghost btn-icon ${refreshing ? "spin" : ""}`}
-              onClick={handleManualRefresh}
-              aria-label="Refresh"
-              title="Refresh"
-            >
-              ⟳
-            </button>
-            <button className="btn btn-ghost btn-icon" onClick={handleLogout} aria-label="Lock">
-              🔒
-            </button>
-          </div>
-        </div>
-
-        <button className="btn btn-primary new-note-btn" onClick={handleNew}>
-          + New note
-        </button>
-
-        <FoldersBar
-          folders={folders}
-          activeFolderId={activeFolderId}
-          onSelect={setActiveFolderId}
-          onCreate={handleCreateFolder}
-          onDelete={requestDeleteFolder}
-        />
-
+    <>
+      <FoldersBar
+        folders={folders}
+        activeFolderId={activeFolderId}
+        onSelect={setActiveFolderId}
+        onCreate={handleCreateFolder}
+        onDelete={requestDeleteFolder}
+        offline={offline}
+        pending={pending}
+      />
+      <div className="app-shell">
         <NotesList
           notes={visibleNotes}
           activeId={activeId}
-          onSelect={handleSelect}
           search={search}
-          onSearchChange={setSearch}
+          onSearch={setSearch}
+          onSelect={handleSelect}
+          onNew={handleNew}
+          onDelete={requestDeleteNote}
+          onRefresh={handleManualRefresh}
+          refreshing={refreshing}
+          mobileView={mobileView}
         />
-
-        <div className="sync-status">
-          <span className={`status-dot ${offline ? "offline" : "online"}`} />
-          <span>
-            {offline ? "Offline — saved locally" : pending > 0 ? `Syncing ${pending}…` : "Synced"}
-          </span>
-        </div>
-      </aside>
-
-      <main className={`editor-pane ${mobileView === "list" ? "editor-hidden-mobile" : ""}`}>
-        {activeNote ? (
-          <NoteEditor
-            note={activeNote}
-            folders={folders}
-            onChange={handleChange}
-            onDelete={requestDeleteNote}
-            onBack={() => setMobileView("list")}
-          />
-        ) : (
-          <div className="editor-placeholder">
-            <p>Select a note, or create a new one.</p>
-          </div>
-        )}
-      </main>
-
-      <ConfirmDialog
-        open={!!confirmState}
-        title={confirmState?.type === "folder" ? "Delete this folder?" : "Delete this note?"}
-        message={
-          confirmState?.type === "folder"
-            ? `"${confirmState?.target?.name}" will be removed. Notes inside it won't be deleted — they'll move to No folder.`
-            : `"${confirmState?.target?.title || "Untitled"}" will be permanently deleted. This can't be undone.`
-        }
-        confirmLabel="Delete"
-        danger
-        onConfirm={confirmDelete}
-        onCancel={() => setConfirmState(null)}
-      />
-    </div>
+        <NoteEditor
+          note={activeNote}
+          onChange={handleChange}
+          onBack={() => setMobileView("list")}
+          mobileView={mobileView}
+          offline={offline}
+        />
+      </div>
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.type === "note" ? "Delete note?" : "Delete folder?"}
+          message={
+            confirmState.type === "note"
+              ? "This note will be permanently deleted."
+              : "Notes in this folder will be moved to no folder."
+          }
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
+    </>
   );
 }
