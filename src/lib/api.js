@@ -5,6 +5,8 @@
 const CACHE_KEY = "notes:cache:v1";
 const FOLDERS_CACHE_KEY = "notes:folders:v1";
 const QUEUE_KEY = "notes:queue:v1";
+const OFFLINE_AUTH_KEY = "notes:offline-auth:v1";
+const OFFLINE_AUTH_ITERATIONS = 150000;
 
 function readJSON(key, fallback) {
   try {
@@ -51,6 +53,97 @@ export function pendingCount() {
   return getQueue().length;
 }
 
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function randomSalt() {
+  return crypto.getRandomValues(new Uint8Array(16));
+}
+
+async function deriveOfflineVerifier(password, salt, iterations = OFFLINE_AUTH_ITERATIONS) {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    256
+  );
+
+  return new Uint8Array(bits);
+}
+
+export async function rememberOfflinePassword(password) {
+  const salt = randomSalt();
+  const verifier = await deriveOfflineVerifier(password, salt);
+  writeJSON(OFFLINE_AUTH_KEY, {
+    version: 1,
+    algorithm: "PBKDF2-SHA-256",
+    iterations: OFFLINE_AUTH_ITERATIONS,
+    salt: bytesToBase64(salt),
+    verifier: bytesToBase64(verifier)
+  });
+}
+
+export function hasOfflineAuth() {
+  const stored = readJSON(OFFLINE_AUTH_KEY, null);
+  return !!(
+    stored &&
+    stored.version === 1 &&
+    stored.algorithm === "PBKDF2-SHA-256" &&
+    stored.salt &&
+    stored.verifier
+  );
+}
+
+export async function verifyOfflinePassword(password) {
+  const stored = readJSON(OFFLINE_AUTH_KEY, null);
+  if (!stored || stored.version !== 1 || !stored.salt || !stored.verifier) {
+    return false;
+  }
+
+  try {
+    const salt = base64ToBytes(stored.salt);
+    const expected = base64ToBytes(stored.verifier);
+    const actual = await deriveOfflineVerifier(password, salt, stored.iterations || OFFLINE_AUTH_ITERATIONS);
+
+    if (actual.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < actual.length; i += 1) diff |= actual[i] ^ expected[i];
+    return diff === 0;
+  } catch {
+    return false;
+  }
+}
+
+function clearOfflineAuth() {
+  try {
+    localStorage.removeItem(OFFLINE_AUTH_KEY);
+  } catch {
+    // storage unavailable — nothing else to do
+  }
+}
+
 async function request(path, options = {}) {
   const res = await fetch(path, {
     credentials: "include",
@@ -71,14 +164,17 @@ async function request(path, options = {}) {
 }
 
 export async function login(password) {
-  return request("/api/login", {
+  const result = await request("/api/login", {
     method: "POST",
     body: JSON.stringify({ password })
   });
+  await rememberOfflinePassword(password);
+  return result;
 }
 
 export async function logout() {
   await request("/api/logout", { method: "POST" }).catch(() => {});
+  clearOfflineAuth();
   setCachedNotes([]);
   setCachedFolders([]);
   setQueue([]);
