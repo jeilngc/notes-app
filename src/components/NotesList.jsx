@@ -1,3 +1,5 @@
+import { htmlToText } from "../lib/richtext.js";
+
 function formatDate(ts) {
   const d = new Date(ts);
   const now = new Date();
@@ -10,7 +12,7 @@ export default function NotesList({ notes, activeId, onSelect, search, onSearchC
   const filtered = notes.filter((n) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q);
+    return n.title.toLowerCase().includes(q) || htmlToText(n.body).toLowerCase().includes(q);
   });
 
   return (
@@ -37,7 +39,9 @@ export default function NotesList({ notes, activeId, onSelect, search, onSearchC
             onClick={() => onSelect(note.id)}
           >
             <div className="note-item-title">{note.title || "Untitled"}</div>
-            <div className="note-item-preview">{note.body ? note.body.slice(0, 80) : "No additional text"}</div>
+            <div className="note-item-preview">
+              {note.body ? htmlToText(note.body).slice(0, 80) || "No additional text" : "No additional text"}
+            </div>
             <div className="note-item-date">{formatDate(note.updatedAt)}</div>
           </button>
         ))}

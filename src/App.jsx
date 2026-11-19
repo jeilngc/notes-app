@@ -272,6 +272,7 @@ export default function App() {
       <main className={`editor-pane ${mobileView === "list" ? "editor-hidden-mobile" : ""}`}>
         {activeNote ? (
           <NoteEditor
+            key={activeNote.id}
             note={activeNote}
             folders={folders}
             onChange={handleChange}
